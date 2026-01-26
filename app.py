@@ -11,6 +11,40 @@ import random
 import re
 import logging
 
+# 🔒 PASSWORD PROTECTION - START
+from functools import wraps
+from flask import Response
+
+# আপনার সিক্রেট ইউজারনেম ও পাসওয়ার্ড সেট করুন
+ADMIN_USERNAME = "Smailzone"
+ADMIN_PASSWORD = "Ismail1266.()"
+
+def check_auth(username, password):
+    """সহজ ইউজারনেম/পাসওয়ার্ড চেক"""
+    return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
+
+def authenticate():
+    """অথেন্টিকেশন মেসেজ"""
+    return Response(
+        '🔒 Lightning Dice AI - Private System\n\n'
+        'You need to login to access this system.\n'
+        'Username: Smailzone\n'
+        'Password: Ismail1266.()',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Login Required"'}
+    )
+
+def requires_auth(f):
+    """ডেকোরেটর ফাংশন - শুধু login require করবে"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
+# 🔒 PASSWORD PROTECTION - END
+
 # ✅ AI সিস্টেম import করুন
 from prediction_system import IntelligentPredictionSystem
 
@@ -548,6 +582,7 @@ def start_background_fetcher():
 # ==================== API ROUTES ====================
 
 @app.route('/')
+@requires_auth  # 🔒 এই লাইন যোগ করুন
 def index():
     """Main page"""
     start_background_fetcher()
