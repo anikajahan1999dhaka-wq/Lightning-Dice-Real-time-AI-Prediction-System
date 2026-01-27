@@ -1,99 +1,67 @@
 """
-ইন্টেলিজেন্ট প্রেডিকশন সিস্টেম
-72-ঘণ্টার ডেটা + লাইভ ডেটা এনালাইসিস করে High/Low/Middle প্রেডিকশন দেয়
+ডাইস প্যাটার্ন ইন্টেলিজেন্স সিস্টেম v4.0
+স্মার্ট লার্নিং AI: সাম্প্রতিক ২ গেম দেখে, সব প্যাটার্নে একই লজিক, টাইম-অ্যাওয়্যার
 """
 
 import numpy as np
-from collections import defaultdict, deque
+from collections import defaultdict, deque, Counter
 from datetime import datetime, timedelta
 import hashlib
+import random
+import math
 
 class IntelligentPredictionSystem:
-    """ইন্টেলিজেন্ট AI সিস্টেম Lightning Dice প্রেডিকশনের জন্য"""
+    """স্মার্ট ডাইস প্যাটার্ন ইন্টেলিজেন্স সিস্টেম"""
     
     def __init__(self, memory_hours=72):
         self.memory_hours = memory_hours
-        self.games_data = deque(maxlen=50000)  # deque ব্যবহার করে memory optimize
-        self.predictions_history = []  # প্রেডিকশন হিস্ট্রি
-        self.model_knowledge = {}  # AI এর জ্ঞানভাণ্ডার
+        self.games_data = deque(maxlen=50000)
+        self.predictions_history = []
         
-        # স্ট্যাটিসটিকাল মেমোরি
-        self.pattern_memory = defaultdict(list)
-        self.streak_memory = defaultdict(int)
-        self.time_patterns = defaultdict(lambda: defaultdict(int))
+        # ==================== স্মার্ট প্যাটার্ন সিস্টেম ====================
+        self.pattern_system = SmartPatternIntelligenceSystem()
         
-        # মডেল পারফরম্যান্স ট্র্যাকিং
+        # ==================== সেশন মেমোরি ====================
+        self.session_memory = AdvancedSessionMemory()
+        
+        # ==================== ব্যাকআপ সিস্টেম ====================
+        self.backup_system = EnhancedBackupPredictionSystem()
+        
+        # ==================== পারফরম্যান্স ট্র্যাকিং ====================
         self.performance = {
             'total_predictions': 0,
             'correct_predictions': 0,
-            'class_accuracy': {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0},
             'recent_accuracy': deque(maxlen=100),
-            'predictions_by_category': {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0},
-            'correct_by_category': {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0}
+            'system_used': {'pattern': 0, 'backup': 0},
+            'pattern_accuracy': 0,
+            'backup_accuracy': 0,
+            'confidence_calibration_error': 0,
+            'learning_effectiveness': 0.5
         }
         
-        # সেলফ-লার্নিং প্যারামিটারস
-        self.learning_rate = 0.1
-        self.confidence_threshold = 0.7
-        
-        print("🤖 ইন্টেলিজেন্ট প্রেডিকশন সিস্টেম শুরু হয়েছে...")
+        print("🧠 স্মার্ট ডাইস প্যাটার্ন ইন্টেলিজেন্স সিস্টেম v4.0 শুরু হয়েছে...")
+        print("🎯 ফিচার: সাম্প্রতিক ২-গেম এনালাইসিস, টাইম-অ্যাওয়্যার, সঠিক শেখা")
     
     def add_game_data(self, game_data):
         """নতুন গেম ডেটা যোগ করুন"""
         self.games_data.append(game_data)
         
-        # শুধু শেষ 72 ঘণ্টার ডেটা রাখুন
+        # 72 ঘণ্টার পুরাতন ডেটা রাখা
         cutoff_time = datetime.now() - timedelta(hours=self.memory_hours)
-        
-        # Remove old games
         while self.games_data and self.games_data[0]['timestamp'] < cutoff_time:
             self.games_data.popleft()
         
-        # প্যাটার্ন আপডেট করুন
-        self._update_patterns(game_data)
-    
-    def _update_patterns(self, game_data):
-        """ডেটা থেকে প্যাটার্ন শিখুন"""
-        total = game_data['total']
-        category = self._get_category(total)
+        # নতুন প্যাটার্ন সিস্টেমে ডেটা যোগ
+        category = self._get_category(game_data['total'])
         timestamp = game_data['timestamp']
         
-        # টাইম প্যাটার্ন
-        hour = timestamp.hour
-        self.time_patterns[hour][category] += 1
+        # সব সিস্টেমে ডেটা যোগ
+        self.pattern_system.add_game(category, timestamp)
+        self.session_memory.add_game(category, timestamp)
+        self.backup_system.add_game(category)
         
-        # স্ট্রীক ট্র্যাকিং
-        if not hasattr(self, 'last_category'):
-            self.last_category = category
-            self.current_streak = 1
-        else:
-            if category == self.last_category:
-                self.current_streak += 1
-            else:
-                self.current_streak = 1
-                self.last_category = category
-        
-        # গ্যাপ অ্যানালাইসিস
-        self._update_gap_analysis(category, timestamp)
-        
-        # ডাইস প্যাটার্ন
-        dice_combo = (game_data['dice1'], game_data['dice2'], game_data['dice3'])
-        if dice_combo not in self.pattern_memory:
-            self.pattern_memory[dice_combo] = []
-        self.pattern_memory[dice_combo].append(category)
-    
-    def _update_gap_analysis(self, category, timestamp):
-        """গ্যাপ (কতক্ষণ পরে আবার আসে) অ্যানালাইসিস"""
-        if not hasattr(self, 'last_seen'):
-            self.last_seen = {}
-        
-        if category in self.last_seen:
-            gap = (timestamp - self.last_seen[category]).total_seconds() / 60  # মিনিটে
-            if 'gaps' not in self.model_knowledge:
-                self.model_knowledge['gaps'] = defaultdict(list)
-            self.model_knowledge['gaps'][category].append(gap)
-        
-        self.last_seen[category] = timestamp
+        # পেন্ডিং প্রেডিকশন আপডেট
+        self._update_pending_predictions(category, game_data)
     
     def _get_category(self, total):
         """টোটাল থেকে ক্যাটাগরি নির্ধারণ"""
@@ -101,312 +69,172 @@ class IntelligentPredictionSystem:
             return "LOW"
         elif 10 <= total <= 11:
             return "MIDDLE"
-        else:  # 12-18
+        else:
             return "HIGH"
     
-    def _calculate_probabilities(self):
-        """বিভিন্ন ফ্যাক্টর থেকে প্রোবাবিলিটি ক্যালকুলেট"""
-        
-        if len(self.games_data) < 10:
-            return {'LOW': 0.33, 'MIDDLE': 0.34, 'HIGH': 0.33}
-        
-        # 1. হিস্টোরিক্যাল ফ্রিকোয়েন্সি
-        categories = [self._get_category(g['total']) for g in list(self.games_data)[-100:]]
-        freq = {
-            'LOW': categories.count('LOW') / len(categories),
-            'MIDDLE': categories.count('MIDDLE') / len(categories),
-            'HIGH': categories.count('HIGH') / len(categories)
-        }
-        
-        # 2. স্ট্রীক অ্যানালাইসিস
-        streak_factor = self._analyze_streaks()
-        
-        # 3. টাইম-বেজড প্যাটার্ন
-        time_factor = self._analyze_time_patterns()
-        
-        # 4. গ্যাপ অ্যানালাইসিস
-        gap_factor = self._analyze_gaps()
-        
-        # 5. ডাইস প্যাটার্ন
-        dice_factor = self._analyze_dice_patterns()
-        
-        # সব ফ্যাক্টর combine করুন
-        final_probs = {}
-        for category in ['LOW', 'MIDDLE', 'HIGH']:
-            prob = freq[category]
-            
-            # Apply factors
-            if category in streak_factor:
-                prob *= streak_factor[category]
-            if category in time_factor:
-                prob *= time_factor[category]
-            if category in gap_factor:
-                prob *= gap_factor[category]
-            if category in dice_factor:
-                prob *= dice_factor[category]
-            
-            final_probs[category] = prob
-        
-        # Normalize
-        total = sum(final_probs.values())
-        if total > 0:
-            final_probs = {k: v/total for k, v in final_probs.items()}
-        
-        return final_probs
-    
-    def _analyze_streaks(self):
-        """স্ট্রীক প্যাটার্ন অ্যানালাইসিস"""
-        factors = {'LOW': 1.0, 'MIDDLE': 1.0, 'HIGH': 1.0}
-        
-        if hasattr(self, 'current_streak') and self.current_streak > 2:
-            current_cat = self.last_category
-            
-            # স্ট্রীক বেশি লম্বা হলে ব্রেক হওয়ার সম্ভাবনা বেশি
-            if self.current_streak >= 3:
-                for cat in ['LOW', 'MIDDLE', 'HIGH']:
-                    if cat != current_cat:
-                        factors[cat] = 1.5  # অন্য ক্যাটাগরির সম্ভাবনা বাড়ান
-                factors[current_cat] = 0.7  # বর্তমান ক্যাটাগরির সম্ভাবনা কমান
-        
-        return factors
-    
-    def _analyze_time_patterns(self):
-        """সময়ভিত্তিক প্যাটার্ন"""
-        factors = {'LOW': 1.0, 'MIDDLE': 1.0, 'HIGH': 1.0}
-        
-        current_hour = datetime.now().hour
-        
-        if current_hour in self.time_patterns:
-            hour_data = self.time_patterns[current_hour]
-            total_games = sum(hour_data.values())
-            
-            if total_games > 10:
-                for cat, count in hour_data.items():
-                    factors[cat] = 1.0 + (count / total_games) * 0.5
-        
-        return factors
-    
-    def _analyze_gaps(self):
-        """গ্যাপ অ্যানালাইসিস (কতক্ষণ দেখা যায়নি)"""
-        factors = {'LOW': 1.0, 'MIDDLE': 1.0, 'HIGH': 1.0}
-        
-        if hasattr(self, 'last_seen') and 'gaps' in self.model_knowledge:
-            current_time = datetime.now()
-            
-            for category in ['LOW', 'MIDDLE', 'HIGH']:
-                if category in self.last_seen:
-                    # কতক্ষণ দেখা যায়নি
-                    minutes_since_last = (current_time - self.last_seen[category]).total_seconds() / 60
-                    
-                    # এই ক্যাটাগরির গড় গ্যাপ
-                    if category in self.model_knowledge['gaps']:
-                        avg_gap = np.mean(self.model_knowledge['gaps'][category])
-                        if avg_gap > 0:
-                            # গড়ের চেয়ে বেশি সময় হলে আসার সম্ভাবনা বাড়ে
-                            if minutes_since_last > avg_gap * 1.5:
-                                factors[category] = 1.8
-                            elif minutes_since_last > avg_gap:
-                                factors[category] = 1.3
-    
-        return factors
-    
-    def _analyze_dice_patterns(self):
-        """ডাইস কম্বিনেশন প্যাটার্ন"""
-        factors = {'LOW': 1.0, 'MIDDLE': 1.0, 'HIGH': 1.0}
-        
-        if len(self.games_data) > 0:
-            last_game = list(self.games_data)[-1] if self.games_data else None
-            if last_game:
-                last_dice = (last_game['dice1'], last_game['dice2'], last_game['dice3'])
-                
-                # এই ডাইস কম্বিনেশনের পর সাধারণত কী আসে
-                if last_dice in self.pattern_memory and len(self.pattern_memory[last_dice]) > 5:
-                    outcomes = self.pattern_memory[last_dice]
-                    for cat in ['LOW', 'MIDDLE', 'HIGH']:
-                        freq = outcomes.count(cat) / len(outcomes)
-                        factors[cat] = 1.0 + freq * 0.3
-        
-        return factors
-    
-    def predict_next_game(self):
-        """পরবর্তী গেমের প্রেডিকশন করুন"""
-        
-        if len(self.games_data) < 20:
-            return {
-                'prediction_id': hashlib.md5(str(datetime.now()).encode()).hexdigest()[:12],
-                'prediction': 'LOW',
-                'confidence': 0.5,
-                'probabilities': {'LOW': 0.33, 'MIDDLE': 0.34, 'HIGH': 0.33},
-                'reason': 'পর্যাপ্ত ডেটা নেই, ডিফল্ট প্রেডিকশন',
-                'system_status': 'training',
-                'timestamp': datetime.now().isoformat(),
-                'game_count': len(self.games_data)
-            }
-        
-        # প্রোবাবিলিটি ক্যালকুলেট
-        probabilities = self._calculate_probabilities()
-        
-        # সবচেয়ে বেশি প্রোবাবিলিটি
-        prediction = max(probabilities.items(), key=lambda x: x[1])[0]
-        confidence = probabilities[prediction]
-        
-        # কনফিডেন্স ক্যালিব্রেশন
-        calibrated_confidence = self._calibrate_confidence(prediction, confidence)
-        
-        # কারণ/যুক্তি জেনারেট
-        reasoning = self._generate_reasoning(prediction, probabilities)
-        
-        # Generate prediction ID
-        prediction_id = hashlib.md5(f"{datetime.now().timestamp()}_{prediction}".encode()).hexdigest()[:12]
-        
-        # Performance ট্র্যাক করার জন্য স্টোর
-        prediction_record = {
-            'prediction_id': prediction_id,
-            'timestamp': datetime.now(),
-            'prediction': prediction,
-            'confidence': calibrated_confidence,
-            'probabilities': probabilities.copy(),
-            'reason': reasoning,
-            'game_count': len(self.games_data),
-            'status': 'pending'  # pending, correct, incorrect
-        }
-        
-        self.predictions_history.append(prediction_record)
-        self.performance['total_predictions'] += 1
-        self.performance['predictions_by_category'][prediction] += 1
-        
-        return {
-            'prediction_id': prediction_id,
-            'prediction': prediction,
-            'confidence': calibrated_confidence,
-            'probabilities': probabilities,
-            'reason': reasoning,
-            'system_status': 'active',
-            'data_points': len(self.games_data),
-            'timestamp': datetime.now().isoformat()
-        }
-    
-    def _calibrate_confidence(self, prediction, raw_confidence):
-        """কনফিডেন্স লেভেল ক্যালিব্রেট করুন"""
-        
-        # স্ট্রীক এর উপর ভিত্তি করে adjust
-        if hasattr(self, 'current_streak') and self.current_streak >= 3:
-            if prediction != self.last_category:
-                # স্ট্রীক ব্রেক করার প্রেডিকশন - কম কনফিডেন্ট
-                calibrated = raw_confidence * 0.8
-            else:
-                # স্ট্রীক continue করার প্রেডিকশন - বেশি কনফিডেন্ট
-                calibrated = raw_confidence * 1.2
-        else:
-            calibrated = raw_confidence
-        
-        # MIDDLE প্রেডিকশনে কম কনফিডেন্ট (কারণ rare)
-        if prediction == 'MIDDLE':
-            calibrated *= 0.9
-        
-        # Ensure between 0.3 and 0.95
-        calibrated = max(0.3, min(0.95, calibrated))
-        
-        return round(calibrated, 2)
-    
-    def _generate_reasoning(self, prediction, probabilities):
-        """প্রেডিকশনের কারণ জেনারেট করুন"""
-        
-        reasons = []
-        
-        # 1. প্রোবাবিলিটি ভিত্তিতে
-        reasons.append(f"সম্ভাবনা: {prediction} ({probabilities[prediction]*100:.1f}%)")
-        
-        # 2. স্ট্রীক ভিত্তিতে
-        if hasattr(self, 'current_streak') and self.current_streak >= 2:
-            reasons.append(f"বর্তমান স্ট্রীক: {self.last_category} ×{self.current_streak}")
-        
-        # 3. টাইম ভিত্তিতে
-        current_hour = datetime.now().hour
-        if current_hour in self.time_patterns:
-            hour_stats = self.time_patterns[current_hour]
-            total = sum(hour_stats.values())
-            if total > 5 and prediction in hour_stats:
-                percent = (hour_stats[prediction] / total) * 100
-                reasons.append(f"এই সময়ে {prediction}: {percent:.0f}%")
-        
-        # 4. গ্যাপ ভিত্তিতে
-        if hasattr(self, 'last_seen') and prediction in self.last_seen:
-            minutes_ago = (datetime.now() - self.last_seen[prediction]).total_seconds() / 60
-            reasons.append(f"শেষ {prediction}: {minutes_ago:.0f} মিনিট আগে")
-        
-        return " | ".join(reasons[:3])  # Max 3 reasons
-    
-    def update_accuracy(self, actual_category, game_id=None, game_timestamp=None):
-        """প্রেডিকশন এক্যুরেসি আপডেট করুন"""
+    def _update_pending_predictions(self, actual_category, game_data):
+        """পেন্ডিং প্রেডিকশন আপডেট করুন"""
         if len(self.predictions_history) == 0:
             return None
         
-        # Find the latest pending prediction
+        # সর্বশেষ পেন্ডিং প্রেডিকশন খুঁজুন
         for pred in reversed(self.predictions_history):
             if pred.get('status') == 'pending':
                 predicted_category = pred['prediction']
                 is_correct = predicted_category == actual_category
                 
-                # Update prediction record
+                # প্রেডিকশন রেকর্ড আপডেট
                 pred['actual_category'] = actual_category
                 pred['is_correct'] = is_correct
                 pred['status'] = 'correct' if is_correct else 'incorrect'
                 pred['evaluated_at'] = datetime.now()
-                if game_id:
-                    pred['game_id'] = game_id
-                if game_timestamp:
-                    pred['game_timestamp'] = game_timestamp
+                pred['game_id'] = game_data.get('game_id', '')
+                pred['game_timestamp'] = game_data.get('timestamp')
                 
-                # Performance আপডেট
+                # পারফরম্যান্স আপডেট
+                self.performance['total_predictions'] += 1
                 if is_correct:
                     self.performance['correct_predictions'] += 1
-                    self.performance['class_accuracy'][predicted_category] += 1
-                    self.performance['correct_by_category'][predicted_category] += 1
+                
+                # সিস্টেম accuracy ট্র্যাক
+                system_used = pred.get('system_used', 'pattern')
+                if system_used == 'pattern':
+                    self.performance['pattern_accuracy'] = (
+                        (self.performance['pattern_accuracy'] * 0.9) + (1 if is_correct else 0) * 0.1
+                    )
+                elif system_used == 'backup':
+                    self.performance['backup_accuracy'] = (
+                        (self.performance['backup_accuracy'] * 0.9) + (1 if is_correct else 0) * 0.1
+                    )
                 
                 self.performance['recent_accuracy'].append(1 if is_correct else 0)
                 
-                # সেলফ-লার্নিং: ভুল হলে কারণ খুঁজুন
-                if not is_correct:
-                    self._learn_from_mistake(predicted_category, actual_category)
+                # কনফিডেন্স ক্যালিব্রেশন error ট্র্যাক
+                confidence_error = abs(pred['confidence'] - (1 if is_correct else 0))
+                self.performance['confidence_calibration_error'] = (
+                    self.performance['confidence_calibration_error'] * 0.9 + confidence_error * 0.1
+                )
                 
-                # Log the result
+                # প্যাটার্ন সিস্টেমকে ফলাফল জানান
+                self.pattern_system.learn_from_result(
+                    predicted_category, 
+                    actual_category,
+                    pred.get('pattern_info', {}),
+                    pred['confidence'],
+                    pred.get('timestamp')
+                )
+                
+                # লার্নিং ইফেক্টিভনেস আপডেট
+                recent_accuracy = list(self.performance['recent_accuracy'])[-10:]
+                if len(recent_accuracy) >= 5:
+                    accuracy_rate = sum(recent_accuracy) / len(recent_accuracy)
+                    self.performance['learning_effectiveness'] = accuracy_rate
+                
+                # লগ
                 status = "✅ CORRECT" if is_correct else "❌ INCORRECT"
                 print(f"\n🎯 {status}: Predicted {predicted_category}, Actual {actual_category}")
-                if game_id:
-                    print(f"   Game ID: {game_id}")
-                print(f"   Confidence: {pred['confidence']*100:.1f}% | Reason: {pred['reason']}")
+                print(f"   System: {system_used} | Confidence: {pred['confidence']*100:.1f}%")
                 
                 return is_correct
         
         return None
     
-    def _learn_from_mistake(self, predicted, actual):
-        """ভুল থেকে শিখুন"""
-        print(f"🤔 AI শিখছে: {predicted} ভবিষ্যদ্বাণী করেছিলাম, কিন্তু {actual} এলো")
+    def predict_next_game(self):
+        """পরবর্তী গেমের প্রেডিকশন করুন"""
         
-        # ভুলের প্যাটার্ন ট্র্যাক
-        mistake_key = f"{predicted}_to_{actual}"
-        if 'mistake_patterns' not in self.model_knowledge:
-            self.model_knowledge['mistake_patterns'] = defaultdict(int)
+        # পর্যাপ্ত ডেটা না থাকলে ব্যাকআপ সিস্টেম ব্যবহার করুন
+        if len(self.games_data) < 10:
+            return self._get_backup_prediction()
         
-        self.model_knowledge['mistake_patterns'][mistake_key] += 1
+        # প্যাটার্ন সিস্টেম থেকে প্রেডিকশন নিন
+        pattern_prediction = self.pattern_system.predict_next()
         
-        # Learning rate adjust
-        if len(self.performance['recent_accuracy']) >= 20:
-            recent_acc = sum(self.performance['recent_accuracy']) / len(self.performance['recent_accuracy'])
-            if recent_acc < 0.6:
-                self.learning_rate = min(0.3, self.learning_rate * 1.1)  # আরও শিখুন
-            elif recent_acc > 0.8:
-                self.learning_rate = max(0.05, self.learning_rate * 0.9)  # কম শিখুন
+        if pattern_prediction['confidence'] >= 0.4:  # লো থ্রেশহোল্ড
+            self.performance['system_used']['pattern'] += 1
+            return self._create_prediction_record(pattern_prediction, 'pattern')
+        
+        # ব্যাকআপ সিস্টেম
+        return self._get_backup_prediction()
     
-    def get_pending_predictions(self):
-        """Get all pending predictions"""
-        return [p for p in self.predictions_history if p.get('status') == 'pending']
+    def _create_prediction_record(self, prediction, system_used):
+        """প্রেডিকশন রেকর্ড তৈরি করুন"""
+        prediction_id = hashlib.md5(
+            f"{datetime.now().timestamp()}_{prediction['prediction']}".encode()
+        ).hexdigest()[:12]
+        
+        # নিশ্চিত করুন সব required fields আছে
+        if 'probabilities' not in prediction:
+            prediction['probabilities'] = self._get_default_probabilities()
+        
+        prediction_record = {
+            'prediction_id': prediction_id,
+            'timestamp': datetime.now(),
+            'prediction': prediction['prediction'],
+            'confidence': prediction['confidence'],
+            'reason': prediction['reason'],
+            'game_count': len(self.games_data),
+            'status': 'pending',
+            'system_used': system_used,
+            'pattern_info': prediction.get('pattern_info', {})
+        }
+        
+        self.predictions_history.append(prediction_record)
+        
+        return {
+            'prediction_id': prediction_id,
+            'prediction': prediction['prediction'],
+            'confidence': prediction['confidence'],
+            'probabilities': prediction['probabilities'],
+            'reason': prediction['reason'],
+            'system_status': f'{system_used}_analysis',
+            'data_points': len(self.games_data),
+            'pattern_detected': prediction.get('pattern_detected', False),
+            'pattern_type': prediction.get('pattern_type', 'none'),
+            'pattern_duration': prediction.get('pattern_duration', 0),
+            'timestamp': datetime.now().isoformat()
+        }
+    
+    def _get_default_probabilities(self):
+        """ডিফল্ট প্রোবাবিলিটি রিটার্ন করুন"""
+        return {'LOW': 0.44, 'MIDDLE': 0.17, 'HIGH': 0.39}
+    
+    def _get_backup_prediction(self):
+        """ব্যাকআপ সিস্টেম থেকে প্রেডিকশন নিন"""
+        self.performance['system_used']['backup'] += 1
+        
+        backup_pred = self.backup_system.predict()
+        
+        prediction_id = hashlib.md5(
+            f"{datetime.now().timestamp()}_{backup_pred['prediction']}".encode()
+        ).hexdigest()[:12]
+        
+        prediction_record = {
+            'prediction_id': prediction_id,
+            'timestamp': datetime.now(),
+            'prediction': backup_pred['prediction'],
+            'confidence': backup_pred['confidence'],
+            'reason': backup_pred['reason'],
+            'game_count': len(self.games_data),
+            'status': 'pending',
+            'system_used': 'backup'
+        }
+        
+        self.predictions_history.append(prediction_record)
+        
+        return {
+            'prediction_id': prediction_id,
+            'prediction': backup_pred['prediction'],
+            'confidence': backup_pred['confidence'],
+            'probabilities': backup_pred.get('probabilities', self._get_default_probabilities()),
+            'reason': backup_pred['reason'],
+            'system_status': 'frequency_analysis',
+            'data_points': len(self.games_data),
+            'pattern_detected': False,
+            'timestamp': datetime.now().isoformat()
+        }
     
     def get_system_stats(self):
-        """সিস্টেম স্ট্যাটিস্টিক্স পান - শুধু evaluated প্রেডিকশন গণনা"""
-        # শুধু evaluated প্রেডিকশন (correct/incorrect) গণনা করুন
+        """সিস্টেম স্ট্যাটিস্টিক্স পান"""
         evaluated_predictions = [p for p in self.predictions_history 
                                if p.get('status') in ['correct', 'incorrect']]
         
@@ -415,77 +243,553 @@ class IntelligentPredictionSystem:
         
         accuracy = (correct_evaluated / total_evaluated * 100) if total_evaluated > 0 else 0
         
-        # সাম্প্রতিক এক্যুরেসি (শেষ ১০টি evaluated প্রেডিকশন)
-        recent_evaluated = evaluated_predictions[-10:] if len(evaluated_predictions) >= 10 else evaluated_predictions
+        # সাম্প্রতিক accuracy
+        recent_evaluated = evaluated_predictions[-20:] if len(evaluated_predictions) >= 20 else evaluated_predictions
         recent_correct = sum(1 for p in recent_evaluated if p.get('is_correct', False))
         recent_acc = (recent_correct / len(recent_evaluated) * 100) if recent_evaluated else 0
         
-        # ক্যাটাগরি ডিস্ট্রিবিউশন
-        categories = [self._get_category(g['total']) for g in self.games_data] if self.games_data else []
-        total_games = len(categories)
-        
-        distribution = {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0}
-        if total_games > 0:
-            distribution = {
+        # ক্লাস ডিস্ট্রিবিউশন
+        if self.games_data:
+            categories = [self._get_category(g['total']) for g in self.games_data]
+            total_games = len(categories)
+            class_distribution = {
                 'LOW': round(categories.count('LOW') / total_games * 100, 1),
                 'MIDDLE': round(categories.count('MIDDLE') / total_games * 100, 1),
                 'HIGH': round(categories.count('HIGH') / total_games * 100, 1)
             }
+        else:
+            class_distribution = {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0}
         
-        # Category accuracy (শুধু evaluated প্রেডিকশনের জন্য)
-        category_accuracy = {}
-        predictions_by_category = {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0}
-        correct_by_category = {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0}
-        
-        # evaluated প্রেডিকশন থেকে category accuracy গণনা
-        for pred in evaluated_predictions:
-            pred_category = pred.get('prediction')
-            if pred_category in predictions_by_category:
-                predictions_by_category[pred_category] += 1
-                if pred.get('is_correct', False):
-                    correct_by_category[pred_category] += 1
-        
-        for cat in ['LOW', 'MIDDLE', 'HIGH']:
-            total_preds = predictions_by_category[cat]
-            correct_preds = correct_by_category[cat]
-            cat_acc = (correct_preds / total_preds * 100) if total_preds > 0 else 0
-            category_accuracy[cat] = round(cat_acc, 1)
-        
-        # মোট প্রেডিকশন (সব ধরণের) - শুধু তথ্যের জন্য
-        all_predictions_count = len(self.predictions_history)
-        pending_predictions_count = len(self.get_pending_predictions())
+        # প্যাটার্ন সিস্টেম stats
+        pattern_stats = self.pattern_system.get_stats()
         
         return {
             'total_games_analyzed': len(self.games_data),
-            'total_predictions': total_evaluated,  # ✅ শুধু evaluated প্রেডিকশন
-            'all_predictions': all_predictions_count,  # সব প্রেডিকশন (তথ্যের জন্য)
-            'pending_predictions': pending_predictions_count,
+            'total_predictions': total_evaluated,
             'correct_predictions': correct_evaluated,
             'accuracy_percentage': round(accuracy, 1),
             'recent_accuracy': round(recent_acc, 1),
-            'class_distribution': distribution,
-            'system_status': 'active' if len(self.games_data) > 50 else 'learning',
-            'learning_rate': round(self.learning_rate, 2),
-            'knowledge_points': len(self.model_knowledge.get('mistake_patterns', {})),
-            'category_accuracy': category_accuracy,
-            'predictions_by_category': predictions_by_category,  # evaluated প্রেডিকশন
-            'correct_by_category': correct_by_category  # evaluated প্রেডিকশন
+            'class_distribution': class_distribution,
+            'system_usage': {
+                'pattern': self.performance['system_used']['pattern'],
+                'backup': self.performance['system_used']['backup'],
+                'pattern_percentage': round(self.performance['system_used']['pattern'] / max(1, total_evaluated) * 100, 1)
+            },
+            'system_accuracy': {
+                'pattern': round(self.performance['pattern_accuracy'] * 100, 1),
+                'backup': round(self.performance['backup_accuracy'] * 100, 1),
+                'overall': round(accuracy, 1)
+            },
+            'learning_metrics': {
+                'confidence_error': round(self.performance['confidence_calibration_error'], 3),
+                'learning_effectiveness': round(self.performance['learning_effectiveness'], 2)
+            },
+            'pattern_system': pattern_stats,
+            'session_info': self.session_memory.get_stats(),
+            'system_status': 'active' if len(self.games_data) > 20 else 'learning'
         }
     
+    def get_pending_predictions(self):
+        """পেন্ডিং প্রেডিকশন পান"""
+        return [p for p in self.predictions_history if p.get('status') == 'pending']
+    
     def get_prediction_history(self, limit=50, include_pending=False):
-        """Get prediction history"""
+        """প্রেডিকশন হিস্ট্রি পান"""
         history = self.predictions_history[-limit:] if self.predictions_history else []
         
         if not include_pending:
             history = [p for p in history if p.get('status') != 'pending']
         
-        # Convert datetime objects to strings for JSON serialization
+        # ডেটাটাইম অবজেক্ট স্ট্রিং-এ কনভার্ট করুন
         for pred in history:
-            if isinstance(pred.get('timestamp'), datetime):
-                pred['timestamp'] = pred['timestamp'].isoformat()
-            if isinstance(pred.get('evaluated_at'), datetime):
-                pred['evaluated_at'] = pred['evaluated_at'].isoformat()
-            if isinstance(pred.get('game_timestamp'), datetime):
-                pred['game_timestamp'] = pred['game_timestamp'].isoformat()
+            for key in ['timestamp', 'evaluated_at', 'game_timestamp']:
+                if key in pred and isinstance(pred[key], datetime):
+                    pred[key] = pred[key].isoformat()
         
         return history
+
+
+class PatternMemory:
+    """একটি প্যাটার্নের জন্য মেমোরি"""
+    
+    def __init__(self, pattern_key):
+        self.pattern_key = pattern_key
+        self.success_count = 0
+        self.error_count = 0
+        self.success_history = []  # সঠিক হলে পরেরটা কি হয়েছিল
+        self.error_history = []    # ভুল হলে পরেরটা কি হয়েছিল
+        self.time_stats = defaultdict(lambda: {'success': 0, 'error': 0})
+        self.last_updated = None
+        
+    def add_result(self, is_correct, next_outcome, timestamp):
+        """রেজাল্ট যোগ করুন"""
+        hour = timestamp.hour
+        
+        if is_correct:
+            self.success_count += 1
+            self.success_history.append(next_outcome)
+            self.time_stats[hour]['success'] += 1
+        else:
+            self.error_count += 1
+            self.error_history.append(next_outcome)
+            self.time_stats[hour]['error'] += 1
+        
+        self.last_updated = timestamp
+        
+        # মেমোরি ম্যানেজমেন্ট
+        if len(self.success_history) > 100:
+            self.success_history = self.success_history[-100:]
+        if len(self.error_history) > 100:
+            self.error_history = self.error_history[-100:]
+    
+    def get_success_rate(self):
+        """সাকসেস রেট পান"""
+        total = self.success_count + self.error_count
+        return self.success_count / total if total > 0 else 0.5
+    
+    def get_time_effectiveness(self, hour):
+        """নির্দিষ্ট সময়ে ইফেক্টিভনেস"""
+        if hour in self.time_stats:
+            stats = self.time_stats[hour]
+            total = stats['success'] + stats['error']
+            return stats['success'] / total if total > 0 else 0.5
+        return 0.5
+    
+    def predict_next(self, current_hour):
+        """পরবর্তী আউটকাম প্রেডিক্ট করুন"""
+        if self.success_count + self.error_count == 0:
+            return None, 0.5
+        
+        # সাকসেস হিস্ট্রি থেকে প্রেডিকশন
+        success_pred = None
+        success_confidence = 0
+        if self.success_history:
+            success_counter = Counter(self.success_history[-20:])  # শেষ ২০টি
+            success_pred, success_count = success_counter.most_common(1)[0]
+            success_confidence = success_count / len(self.success_history[-20:])
+        
+        # এরর হিস্ট্রি থেকে প্রেডিকশন
+        error_pred = None
+        error_confidence = 0
+        if self.error_history:
+            error_counter = Counter(self.error_history[-20:])  # শেষ ২০টি
+            error_pred, error_count = error_counter.most_common(1)[0]
+            error_confidence = error_count / len(self.error_history[-20:])
+        
+        # টাইম ইফেক্টিভনেস
+        time_factor = self.get_time_effectiveness(current_hour)
+        
+        # কম্বাইন প্রেডিকশন
+        if success_pred and error_pred:
+            # ওয়েটেড এভারেজ
+            total_confidence = success_confidence + error_confidence
+            if total_confidence > 0:
+                success_weight = success_confidence / total_confidence * time_factor
+                error_weight = error_confidence / total_confidence * (1 - time_factor)
+                
+                # Success-এ বেশি priority
+                if success_weight >= error_weight:
+                    return success_pred, success_weight
+                else:
+                    return error_pred, error_weight
+        
+        elif success_pred:
+            return success_pred, success_confidence * time_factor
+        
+        elif error_pred:
+            return error_pred, error_confidence * (1 - time_factor)
+        
+        return None, 0.5
+    
+    def get_stats(self):
+        """স্ট্যাটিস্টিক্স পান"""
+        return {
+            'pattern': self.pattern_key,
+            'success_count': self.success_count,
+            'error_count': self.error_count,
+            'success_rate': round(self.get_success_rate() * 100, 1),
+            'recent_success': self.success_history[-5:] if self.success_history else [],
+            'recent_error': self.error_history[-5:] if self.error_history else [],
+            'total_occurrences': self.success_count + self.error_count
+        }
+
+
+class SmartPatternIntelligenceSystem:
+    """স্মার্ট প্যাটার্ন ইন্টেলিজেন্স সিস্টেম"""
+    
+    def __init__(self):
+        # ৯টি বেসিক প্যাটার্ন
+        self.patterns_list = [
+            'HIGH_LOW',    # HIGH→LOW
+            'LOW_HIGH',    # LOW→HIGH  
+            'MIDDLE_HIGH', # MIDDLE→HIGH
+            'HIGH_MIDDLE', # HIGH→MIDDLE
+            'LOW_MIDDLE',  # LOW→MIDDLE
+            'MIDDLE_LOW',  # MIDDLE→LOW
+            'HIGH_HIGH',   # HIGH→HIGH
+            'MIDDLE_MIDDLE', # MIDDLE→MIDDLE
+            'LOW_LOW'      # LOW→LOW
+        ]
+        
+        # প্রতিটি প্যাটার্নের জন্য আলাদা মেমোরি
+        self.pattern_memories = {}
+        for pattern in self.patterns_list:
+            self.pattern_memories[pattern] = PatternMemory(pattern)
+        
+        # সাম্প্রতিক আউটকাম (শেষ ২০টি)
+        self.recent_outcomes = deque(maxlen=50000)
+        
+        # কারেন্ট প্যাটার্ন
+        self.current_pattern = None
+        self.last_two_games = deque(maxlen=2)
+        
+        # ট্রানজিশন ম্যাট্রিক্স
+        self.transition_matrix = defaultdict(lambda: defaultdict(int))
+        
+        print("🧠 স্মার্ট প্যাটার্ন সিস্টেম v4.0 লোড করা হয়েছে")
+        print("📊 ৯টি প্যাটার্ন, সাম্প্রতিক ২-গেম এনালাইসিস, টাইম-অ্যাওয়্যার")
+    
+    def add_game(self, category, timestamp):
+        """নতুন গেম যোগ করুন"""
+        # MEDIUM → MIDDLE ফিক্স
+        if category == 'MEDIUM':
+            category = 'MIDDLE'
+        
+        self.recent_outcomes.append((category, timestamp))
+        self.last_two_games.append((category, timestamp))
+        
+        # ট্রানজিশন ম্যাট্রিক্স আপডেট
+        if len(self.recent_outcomes) >= 2:
+            prev_category, _ = self.recent_outcomes[-2]
+            self.transition_matrix[prev_category][category] += 1
+        
+        # কারেন্ট প্যাটার্ন আপডেট
+        self._update_current_pattern(category, timestamp)
+    
+    def _update_current_pattern(self, current_category, timestamp):
+        """কারেন্ট প্যাটার্ন আপডেট করুন"""
+        if len(self.last_two_games) < 2:
+            return
+        
+        # শেষ ২টি গেম
+        game1_category, game1_time = self.last_two_games[0]
+        game2_category, _ = self.last_two_games[1]
+        
+        # প্যাটার্ন কী তৈরি
+        pattern_key = f"{game1_category}_{game2_category}"
+        
+        if pattern_key in self.pattern_memories:
+            self.current_pattern = pattern_key
+        else:
+            self.current_pattern = None
+    
+    def learn_from_result(self, predicted, actual, pattern_info, confidence, timestamp=None):
+        """ফলাফল থেকে শিখুন"""
+        if not self.current_pattern or timestamp is None:
+            return
+        
+        # প্যাটার্ন মেমোরি খুঁজুন
+        pattern_memory = self.pattern_memories.get(self.current_pattern)
+        if not pattern_memory:
+            return
+        
+        # পরের আউটকাম কী ছিল?
+        if len(self.recent_outcomes) >= 1:
+            next_outcome, _ = self.recent_outcomes[-1]
+            is_correct = (predicted == actual)
+            
+            # মেমোরিতে যোগ করুন
+            pattern_memory.add_result(is_correct, next_outcome, timestamp)
+    
+    def predict_next(self):
+        """পরবর্তী আউটকাম প্রেডিক্ট করুন"""
+        current_time = datetime.now()
+        current_hour = current_time.hour
+        
+        # ১. যদি কারেন্ট প্যাটার্ন থাকে
+        if self.current_pattern:
+            pattern_memory = self.pattern_memories.get(self.current_pattern)
+            if pattern_memory:
+                prediction, confidence = pattern_memory.predict_next(current_hour)
+                
+                if prediction and confidence > 0.4:
+                    # ট্রানজিশন প্রোবাবিলিটি
+                    last_category = self.current_pattern.split('_')[-1]
+                    transition_probs = self._get_transition_probabilities(last_category)
+                    
+                    reason = f"প্যাটার্ন: {self.current_pattern}"
+                    if pattern_memory.success_count > 0:
+                        success_rate = pattern_memory.get_success_rate()
+                        reason += f", সাকসেস: {success_rate*100:.0f}%"
+                    
+                    return {
+                        'prediction': prediction,
+                        'confidence': min(0.85, confidence * 1.2),  # Boost confidence
+                        'reason': reason,
+                        'pattern_type': self.current_pattern,
+                        'pattern_detected': True,
+                        'probabilities': transition_probs
+                    }
+        
+        # ২. ট্রানজিশন-বেসড প্রেডিকশন
+        if len(self.recent_outcomes) >= 1:
+            last_category, _ = self.recent_outcomes[-1]
+            transition_probs = self._get_transition_probabilities(last_category)
+            
+            if transition_probs:
+                most_likely = max(transition_probs.items(), key=lambda x: x[1])
+                confidence = 0.3 + most_likely[1] * 0.5
+                
+                return {
+                    'prediction': most_likely[0],
+                    'confidence': min(0.75, confidence),
+                    'reason': f"ট্রানজিশন প্রোবাবিলিটি: {last_category}→{most_likely[0]} ({most_likely[1]*100:.0f}%)",
+                    'pattern_type': 'transition',
+                    'pattern_detected': True,
+                    'probabilities': transition_probs
+                }
+        
+        # ৩. ফ্রিকোয়েন্সি-বেসড প্রেডিকশন
+        if self.recent_outcomes:
+            recent_categories = [cat for cat, _ in list(self.recent_outcomes)[-10:]]
+            freq = Counter(recent_categories)
+            total = len(recent_categories)
+            
+            if total > 0:
+                most_common = freq.most_common(1)[0]
+                confidence = 0.35 + (most_common[1] / total) * 0.4
+                
+                probs = {}
+                for cat in ['LOW', 'MIDDLE', 'HIGH']:
+                    probs[cat] = freq.get(cat, 0) / total
+                
+                return {
+                    'prediction': most_common[0],
+                    'confidence': min(0.7, confidence),
+                    'reason': f"সাম্প্রতিক ফ্রিকোয়েন্সি: {most_common[0]} ({most_common[1]*100/total:.0f}%)",
+                    'pattern_type': 'frequency',
+                    'pattern_detected': False,
+                    'probabilities': probs
+                }
+        
+        # ৪. ডিফল্ট
+        return {
+            'prediction': 'LOW',
+            'confidence': 0.45,
+            'reason': 'ডিফল্ট প্রেডিকশন',
+            'pattern_type': 'default',
+            'pattern_detected': False,
+            'probabilities': {'LOW': 0.44, 'MIDDLE': 0.17, 'HIGH': 0.39}
+        }
+    
+    def _get_transition_probabilities(self, from_category):
+        """ট্রানজিশন প্রোবাবিলিটি পান"""
+        if from_category not in self.transition_matrix:
+            return {'LOW': 0.44, 'MIDDLE': 0.17, 'HIGH': 0.39}
+        
+        transitions = self.transition_matrix[from_category]
+        total = sum(transitions.values())
+        
+        if total == 0:
+            return {'LOW': 0.44, 'MIDDLE': 0.17, 'HIGH': 0.39}
+        
+        probs = {}
+        for cat in ['LOW', 'MIDDLE', 'HIGH']:
+            probs[cat] = transitions.get(cat, 1) / (total + 3)  # Add-1 smoothing
+        
+        # নরমালাইজ
+        total_prob = sum(probs.values())
+        return {k: v/total_prob for k, v in probs.items()}
+    
+    def get_stats(self):
+        """সিস্টেম স্ট্যাটিস্টিক্স পান"""
+        pattern_stats = {}
+        for pattern_key, memory in self.pattern_memories.items():
+            if memory.success_count + memory.error_count > 0:
+                pattern_stats[pattern_key] = memory.get_stats()
+        
+        # টপ ৫ প্যাটার্ন
+        top_patterns = dict(sorted(
+            pattern_stats.items(),
+            key=lambda x: x[1]['total_occurrences'],
+            reverse=True
+        )[:5])
+        
+        return {
+            'total_patterns': len([p for p in self.pattern_memories.values() 
+                                  if p.success_count + p.error_count > 0]),
+            'top_patterns': top_patterns,
+            'current_pattern': self.current_pattern,
+            'recent_outcomes_count': len(self.recent_outcomes),
+            'transition_matrix_size': len(self.transition_matrix)
+        }
+
+
+class AdvancedSessionMemory:
+    """এডভান্সড সেশন-বেজড মেমোরি"""
+    
+    def __init__(self):
+        self.session_start = datetime.now()
+        self.session_games = []
+        self.hourly_stats = defaultdict(lambda: defaultdict(int))
+        
+    def add_game(self, category, timestamp):
+        """সেশনে গেম যোগ করুন"""
+        # MEDIUM → MIDDLE ফিক্স
+        if category == 'MEDIUM':
+            category = 'MIDDLE'
+            
+        game_record = {
+            'category': category,
+            'timestamp': timestamp,
+            'hour': timestamp.hour
+        }
+        
+        self.session_games.append(game_record)
+        
+        # Hourly stats
+        hour = timestamp.hour
+        self.hourly_stats[hour][category] += 1
+        
+        # মেমোরি ম্যানেজমেন্ট
+        if len(self.session_games) > 2000:
+            self.session_games = self.session_games[-2000:]
+    
+    def get_stats(self):
+        """সেশন স্ট্যাটস পান"""
+        if not self.session_games:
+            return {'total_games': 0, 'session_duration': 0}
+        
+        session_duration = (datetime.now() - self.session_start).total_seconds() / 3600
+        
+        # Hourly distribution
+        hourly_dist = {}
+        for hour in range(24):
+            if hour in self.hourly_stats:
+                total = sum(self.hourly_stats[hour].values())
+                if total > 0:
+                    hourly_dist[hour] = {
+                        'LOW': self.hourly_stats[hour].get('LOW', 0) / total * 100,
+                        'MIDDLE': self.hourly_stats[hour].get('MIDDLE', 0) / total * 100,
+                        'HIGH': self.hourly_stats[hour].get('HIGH', 0) / total * 100
+                    }
+        
+        return {
+            'total_games': len(self.session_games),
+            'session_duration': round(session_duration, 2),
+            'hourly_distribution': hourly_dist
+        }
+
+
+class EnhancedBackupPredictionSystem:
+    """এনহ্যান্সড ব্যাকআপ প্রেডিকশন সিস্টেম"""
+    
+    def __init__(self):
+        self.category_counts = {'LOW': 0, 'MIDDLE': 0, 'HIGH': 0}
+        self.recent_games = deque(maxlen=50000)
+        self.default_probabilities = {'LOW': 0.44, 'MIDDLE': 0.17, 'HIGH': 0.39}
+        
+    def add_game(self, category):
+        """গেম যোগ করুন"""
+        # MEDIUM → MIDDLE ফিক্স
+        if category == 'MEDIUM':
+            category = 'MIDDLE'
+            
+        self.category_counts[category] += 1
+        self.recent_games.append(category)
+    
+    def predict(self):
+        """প্রেডিকশন করুন"""
+        # সাম্প্রতিক ফ্রিকোয়েন্সি
+        if len(self.recent_games) >= 10:
+            recent = list(self.recent_games)[-10:]
+            freq = {
+                'LOW': recent.count('LOW') / len(recent),
+                'MIDDLE': recent.count('MIDDLE') / len(recent),
+                'HIGH': recent.count('HIGH') / len(recent)
+            }
+            
+            most_common = max(freq.items(), key=lambda x: x[1])
+            confidence = 0.4 + most_common[1] * 0.4
+            
+            return {
+                'prediction': most_common[0],
+                'confidence': min(0.7, confidence),
+                'reason': f"সাম্প্রতিক ফ্রিকোয়েন্সি: {most_common[0]} ({most_common[1]*100:.0f}%)",
+                'probabilities': freq
+            }
+        
+        # সামগ্রিক ফ্রিকোয়েন্সি
+        total = sum(self.category_counts.values())
+        if total > 0:
+            freq = {
+                'LOW': self.category_counts['LOW'] / total,
+                'MIDDLE': self.category_counts['MIDDLE'] / total,
+                'HIGH': self.category_counts['HIGH'] / total
+            }
+            
+            most_common = max(freq.items(), key=lambda x: x[1])
+            confidence = 0.45 + most_common[1] * 0.3
+            
+            return {
+                'prediction': most_common[0],
+                'confidence': min(0.65, confidence),
+                'reason': f"সামগ্রিক ফ্রিকোয়েন্সি: {most_common[0]} ({most_common[1]*100:.0f}%)",
+                'probabilities': freq
+            }
+        
+        # ডিফল্ট
+        return {
+            'prediction': 'LOW',
+            'confidence': 0.5,
+            'reason': 'ডিফল্ট প্রেডিকশন',
+            'probabilities': self.default_probabilities
+        }
+
+
+# ==================== টেস্টিং ====================
+if __name__ == "__main__":
+    print("🧪 স্মার্ট DPI সিস্টেম v4.0 টেস্টিং...")
+    
+    # টেস্ট সিস্টেম তৈরি
+    system = IntelligentPredictionSystem()
+    
+    # টেস্ট ডেটা - রিয়েলিস্টিক প্যাটার্ন
+    test_data = [
+        ('LOW', 7), ('LOW', 7), ('HIGH', 15), ('LOW', 8), 
+        ('MIDDLE', 10), ('HIGH', 14), ('HIGH', 16), ('LOW', 9)
+    ]
+    
+    print("\n📊 টেস্ট ডেটা ইনপুট:")
+    for i, (category, total) in enumerate(test_data):
+        game_data = {
+            'total': total,
+            'dice1': 1,
+            'dice2': 2,
+            'dice3': 3,
+            'timestamp': datetime.now() - timedelta(minutes=len(test_data)-i),
+            'game_id': f'test_{i}'
+        }
+        
+        system.add_game_data(game_data)
+        print(f"  Game {i+1}: {category} (Total: {total})")
+    
+    print("\n🎯 প্রেডিকশন টেস্ট:")
+    prediction = system.predict_next_game()
+    print(f"  Prediction: {prediction['prediction']}")
+    print(f"  Confidence: {prediction['confidence']*100:.1f}%")
+    print(f"  Reason: {prediction['reason']}")
+    print(f"  System: {prediction['system_status']}")
+    
+    if 'probabilities' in prediction:
+        probs = prediction['probabilities']
+        print(f"  Probabilities: LOW={probs.get('LOW',0)*100:.1f}%, "
+              f"MIDDLE={probs.get('MIDDLE',0)*100:.1f}%, "
+              f"HIGH={probs.get('HIGH',0)*100:.1f}%")
+    
+    print("\n📈 সিস্টেম স্ট্যাটস:")
+    stats = system.get_system_stats()
+    print(f"  Total Games: {stats['total_games_analyzed']}")
+    print(f"  Distribution: {stats['class_distribution']}")
+    
+    print("\n✅ স্মার্ট DPI সিস্টেম v4.0 রেডি!")
