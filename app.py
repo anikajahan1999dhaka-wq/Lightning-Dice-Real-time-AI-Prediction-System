@@ -36,7 +36,7 @@ CORS(app)
 # Configuration
 USE_MOCK_DATA = False  # Set to True for testing, False for production
 FETCH_INTERVAL = 5  # seconds
-MAX_GAMES = 10000
+MAX_GAMES = 50000
 PORT = int(os.environ.get('PORT', 5000))
 
 # Global variables
