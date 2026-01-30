@@ -11,6 +11,6 @@
     "restartPolicyMaxRetries": 5
   },
   "scripts": {
-    "postdeploy": "echo '🚀 Lightning Dice AI deployed successfully!'"
+    "postdeploy": "echo '🎲 Lightning Dice AI deployed successfully!'"
   }
 }
