@@ -46,6 +46,7 @@ is_fetching = False
 fetcher_started = False
 system_start_time = datetime.now()
 current_view = "all"
+signal_needs_update = True  # Flag for signal updates
 
 # Data fetcher configuration
 if hasattr(data_fetcher, 'use_mock'):
@@ -88,7 +89,7 @@ def get_category_distribution(games_list, limit=1000):
 # Background fetcher thread
 def background_fetcher():
     """Background thread for fetching data"""
-    global all_games, last_fetch_time, is_fetching
+    global all_games, last_fetch_time, is_fetching, signal_needs_update
     
     logger.info("🔄 Starting 24/7 background fetcher...")
     fetch_count = 0
@@ -151,6 +152,9 @@ def background_fetcher():
                         logger.debug(f"Grid update error: {grid_error}")
                     
                     last_fetch_time = datetime.now()
+                    
+                    # ✅ Set signal update flag when new data arrives
+                    signal_needs_update = True
                     
                     logger.info(f"🎮 Added {len(unique_new_games)} new games. Total: {len(all_games)}")
                     
@@ -1213,6 +1217,135 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
+
+# 🔥 NEW ENTRY SIGNAL API
+@app.route('/api/entry-signal')
+def get_entry_signal():
+    """Get AI-based entry signal for betting decisions"""
+    try:
+        # Get current AI prediction
+        prediction = ai_system.predict_next()
+        
+        # Get timing stats
+        ai_stats = ai_system.get_ai_stats()
+        timing_stats = ai_stats.get('timing_stats', {})
+        
+        # Get recent games for context
+        recent_games = list(all_games)[:20] if all_games else []
+        
+        # Initialize decision variables
+        score = 0
+        reasons = []
+        suggested_bet = prediction.get('prediction', 'LOW')
+        confidence = prediction.get('confidence', 0)
+        
+        # Rule 1: Confidence threshold
+        confidence_threshold = 0.65  # 65% confidence minimum
+        if confidence > confidence_threshold:
+            score += 1
+            reasons.append(f"High confidence ({confidence*100:.0f}%)")
+        else:
+            reasons.append(f"Low confidence ({confidence*100:.0f}%)")
+        
+        # Rule 2: Timing analysis
+        prediction_lower = suggested_bet.lower()
+        if prediction_lower in ['low', 'middle', 'high']:
+            timing_key = f'last_{prediction_lower}_minutes'
+            avg_key = f'avg_{prediction_lower}_interval'
+            
+            last_time = timing_stats.get(timing_key, 0)
+            avg_time = timing_stats.get(avg_key, 30)  # default 30 minutes
+            
+            if avg_time > 0 and last_time > avg_time * 1.3:
+                score += 1
+                reasons.append(f"{suggested_bet} overdue ({last_time:.1f} min vs avg {avg_time:.1f} min)")
+            else:
+                reasons.append(f"{suggested_bet} timing normal")
+        
+        # Rule 3: Recent pattern
+        if recent_games:
+            # Check last 3 games
+            last_categories = []
+            for game in recent_games[:3]:
+                if isinstance(game, dict):
+                    cat = game.get('category', 'LOW')
+                    last_categories.append(cat)
+            
+            # Check if predicted category breaks a streak
+            if len(last_categories) >= 2:
+                if all(cat == last_categories[0] for cat in last_categories):
+                    score += 1
+                    reasons.append(f"Streak detected: {last_categories[0]} x{len(last_categories)}")
+        
+        # Rule 4: Probability distribution
+        probabilities = prediction.get('probabilities', {})
+        if probabilities:
+            target_prob = probabilities.get(suggested_bet, 0)
+            other_max = max([prob for key, prob in probabilities.items() if key != suggested_bet])
+            
+            if target_prob > other_max * 1.5:  # 50% higher than next highest
+                score += 1
+                reasons.append(f"Strong probability advantage ({target_prob*100:.0f}% vs {other_max*100:.0f}%)")
+        
+        # Decision logic
+        risk_level = "LOW"
+        if score >= 3:
+            action = "ENTER"
+            if confidence > 0.8:
+                risk_level = "HIGH"
+            else:
+                risk_level = "MEDIUM"
+            color = "success"
+            icon = "🚨"
+        elif score >= 2:
+            action = "CONSIDER"
+            risk_level = "MEDIUM"
+            color = "warning"
+            icon = "⚠️"
+        else:
+            action = "WAIT"
+            color = "info"
+            icon = "⏸️"
+        
+        # Calculate signal strength (0-100%)
+        signal_strength = min(100, (score / 4) * 100)
+        
+        # Prepare response
+        signal_data = {
+            'success': True,
+            'action': action,
+            'prediction': suggested_bet,
+            'confidence': confidence,
+            'score': score,
+            'max_score': 4,
+            'signal_strength': signal_strength,
+            'risk_level': risk_level,
+            'reasons': reasons,
+            'icon': icon,
+            'color': color,
+            'probabilities': probabilities,
+            'timing_info': {
+                'last_update': ai_stats.get('last_training_time'),
+                'games_analyzed': len(ai_system.games_history)
+            },
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Reset signal update flag
+        global signal_needs_update
+        signal_needs_update = False
+        
+        return jsonify(signal_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Entry Signal API error: {e}")
+        return jsonify({
+            'success': False,
+            'action': 'WAIT',
+            'error': 'Signal calculation failed',
+            'reasons': ['System error - using safe mode'],
+            'timestamp': datetime.now().isoformat()
+        })
 
 @app.before_request
 def before_request():
