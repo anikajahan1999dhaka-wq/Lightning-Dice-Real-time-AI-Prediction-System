@@ -20,8 +20,8 @@ class TimingPatternAI:
     """Advanced timing pattern detection AI with detailed tracking - FIXED"""
     
     def __init__(self):
-        self.games_history = deque(maxlen=10000)
-        self.pattern_memory = deque(maxlen=500)
+        self.games_history = deque(maxlen=50000)
+        self.pattern_memory = deque(maxlen=10000)
         self.learning_rate = 0.1
         self.min_confidence = 0.4
         self.last_training_time = None
@@ -33,17 +33,17 @@ class TimingPatternAI:
         
         # Timing analysis
         self.timing_stats = {
-            'low_intervals': deque(maxlen=500),
-            'middle_intervals': deque(maxlen=500),
-            'high_intervals': deque(maxlen=500),
+            'low_intervals': deque(maxlen=2000),
+            'middle_intervals': deque(maxlen=2000),
+            'high_intervals': deque(maxlen=2000),
             'last_low_time': None,
             'last_middle_time': None,
             'last_high_time': None
         }
         
         # Prediction tracking
-        self.prediction_history = deque(maxlen=1000)
-        self.pattern_history = deque(maxlen=500)
+        self.prediction_history = deque(maxlen=10000)
+        self.pattern_history = deque(maxlen=10000)
         self.feature_importance_history = deque(maxlen=100)
         
         # ML Model
