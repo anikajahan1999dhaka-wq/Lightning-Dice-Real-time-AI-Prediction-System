@@ -10,6 +10,11 @@ let autoRefreshInterval;
 let currentGridData = {};
 let aiPrediction = null;
 
+// Entry Signal System Variables
+let signalAutoRefresh = true;
+let signalInterval;
+let lastGameCount = 0;
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
     console.log("🎲 Lightning Dice AI System Initializing...");
@@ -28,6 +33,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup search
     setupSearch();
+    
+    // Initialize Entry Signal System
+    initializeSignalSystem();
 });
 
 // Setup event listeners
@@ -94,6 +102,9 @@ async function loadSystemStatus() {
             // Update status dot
             const statusDot = document.querySelector('.status-dot');
             statusDot.classList.add('online');
+            
+            // Update game count for signal system
+            lastGameCount = data.total_games;
         }
     } catch (error) {
         console.error('Error loading status:', error);
@@ -117,11 +128,13 @@ async function loadGridData() {
             document.getElementById('grid-status').textContent = 
                 `${data.grid_stats.filled_cells}/${data.grid_stats.total_cells}`;
             
-            showNotification('✅ Grid updated successfully', 'success');
+            // Check for new data and update signal
+            if (signalAutoRefresh) {
+                setTimeout(checkEntrySignal, 1000);
+            }
         }
     } catch (error) {
         console.error('Error loading grid:', error);
-        showNotification('❌ Failed to load grid data', 'error');
     }
 }
 
@@ -259,12 +272,9 @@ async function filterGrid(category) {
             if (data.success) {
                 currentGridData = data.grid_data;
                 displayGrid();
-                
-                showNotification(`✅ Showing ${category} games (${data.count} total)`, 'success');
             }
         } catch (error) {
             console.error('Error filtering grid:', error);
-            showNotification('❌ Error loading filtered data', 'error');
         }
     }
 }
@@ -290,10 +300,6 @@ async function searchGames(query) {
                 
                 currentGridData = searchGrid;
                 displayGrid();
-                
-                showNotification(`🔍 Found ${data.results.length} matching games`, 'info');
-            } else {
-                showNotification('🔍 No matching games found', 'info');
             }
         }
     } catch (error) {
@@ -352,7 +358,6 @@ async function getAIPrediction() {
         }
     } catch (error) {
         console.error('Error getting AI prediction:', error);
-        showNotification('❌ Error getting AI prediction', 'error');
     }
 }
 
@@ -412,12 +417,12 @@ async function forceRefresh() {
             loadGridData();
             loadRecentGames();
             getAIPrediction();
+            checkEntrySignal();
             
             showNotification(`✅ Refreshed! Added ${data.new_games} new games`, 'success');
         }
     } catch (error) {
         console.error('Error forcing refresh:', error);
-        showNotification('❌ Error refreshing data', 'error');
     }
 }
 
@@ -555,9 +560,11 @@ document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
         // Page is hidden, stop auto refresh
         stopAutoRefresh();
+        stopSignalAutoRefresh();
     } else if (autoRefresh) {
         // Page is visible, restart auto refresh
         startAutoRefresh();
+        startSignalAutoRefresh();
     }
 });
 
@@ -568,3 +575,319 @@ window.onclick = function(event) {
         closeModal();
     }
 };
+
+// ============================================================
+// ENTRY SIGNAL SYSTEM FUNCTIONS
+// ============================================================
+
+// Initialize signal system
+function initializeSignalSystem() {
+    // Get initial game count
+    fetch('/api/status')
+        .then(res => res.json())
+        .then(data => {
+            lastGameCount = data.total_games || 0;
+            console.log(`🎮 Initial game count: ${lastGameCount}`);
+        });
+    
+    // Setup signal auto-refresh toggle
+    const signalToggle = document.getElementById('signal-auto-refresh');
+    if (signalToggle) {
+        signalToggle.addEventListener('change', function() {
+            signalAutoRefresh = this.checked;
+            if (signalAutoRefresh) {
+                startSignalAutoRefresh();
+                showNotification('🔄 Signal auto-check enabled (5s interval)', 'info');
+            } else {
+                stopSignalAutoRefresh();
+                showNotification('⏸️ Signal auto-check disabled', 'info');
+            }
+        });
+        
+        // Start auto refresh if enabled
+        if (signalToggle.checked) {
+            // Wait 2 seconds then start
+            setTimeout(() => {
+                startSignalAutoRefresh();
+            }, 2000);
+        }
+    } else {
+        // If toggle not found, start anyway
+        startSignalAutoRefresh();
+    }
+    
+    // Check signal after grid updates
+    const originalLoadGridData = loadGridData;
+    loadGridData = async function() {
+        await originalLoadGridData();
+        // Check signal after grid update
+        if (signalAutoRefresh) {
+            setTimeout(checkEntrySignal, 1000);
+        }
+    };
+}
+
+// Check entry signal (trigger on new data)
+async function checkEntrySignal() {
+    try {
+        // First check if we have new games
+        const statusRes = await fetch('/api/status');
+        const statusData = await statusRes.json();
+        
+        const currentGameCount = statusData.total_games || 0;
+        const hasNewGames = currentGameCount > lastGameCount;
+        
+        if (hasNewGames) {
+            lastGameCount = currentGameCount;
+            console.log(`🆕 New games detected: ${currentGameCount} total`);
+        }
+        
+        // Get signal
+        const response = await fetch('/api/entry-signal');
+        const data = await response.json();
+        
+        if (data.success) {
+            displaySignal(data);
+            
+            // Show notification for strong signals with new data
+            if (data.action === 'ENTER' && data.score >= 3 && hasNewGames) {
+                showNotification(
+                    `🚨 NEW DATA: Bet on ${data.prediction} (${(data.confidence * 100).toFixed(0)}% confidence)`, 
+                    'success'
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error checking signal:', error);
+    }
+}
+
+// Display signal
+function displaySignal(signal) {
+    const signalCard = document.getElementById('signal-card');
+    const signalDetails = document.getElementById('signal-details');
+    
+    if (!signal || !signal.action) {
+        signalCard.innerHTML = '<div class="loading">Analyzing latest data...</div>';
+        return;
+    }
+    
+    const action = signal.action;
+    const prediction = signal.prediction || 'LOW';
+    const confidence = (signal.confidence * 100).toFixed(1);
+    const score = signal.score || 0;
+    const maxScore = signal.max_score || 4;
+    const reasons = signal.reasons || [];
+    const risk = signal.risk_level || 'LOW';
+    const icon = signal.icon || '⏸️';
+    
+    // Update timestamp
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+    
+    // Signal strength calculation
+    let strengthClass = 'weak';
+    let strengthText = 'Weak';
+    let strengthPercent = 25;
+    
+    if (score >= 3) {
+        strengthClass = 'very-strong';
+        strengthText = 'Very Strong';
+        strengthPercent = 100;
+    } else if (score >= 2) {
+        strengthClass = 'strong';
+        strengthText = 'Strong';
+        strengthPercent = 75;
+    } else if (score >= 1) {
+        strengthClass = 'moderate';
+        strengthText = 'Moderate';
+        strengthPercent = 50;
+    }
+    
+    // Build HTML based on action
+    let signalHTML = '';
+    let actionClass = '';
+    
+    if (action === 'ENTER') {
+        actionClass = 'signal-go';
+        signalHTML = `
+            <div class="${actionClass}">
+                <div class="signal-action">${icon} ${action}</div>
+                <div class="signal-prediction ${prediction.toLowerCase()}">
+                    🎯 BET ON: ${prediction}
+                </div>
+                <div class="signal-confidence">${confidence}% Confidence</div>
+                
+                <div class="signal-strength">
+                    <span class="strength-text">${strengthText}</span>
+                    <div class="strength-bar">
+                        <div class="strength-fill ${strengthClass}" style="width: ${strengthPercent}%"></div>
+                    </div>
+                </div>
+                
+                <span class="risk-badge risk-${risk.toLowerCase()}">${risk} Risk</span>
+                
+                <div class="signal-reasons">
+                    <strong>Decision Factors:</strong>
+                    <ul>
+                        ${reasons.slice(0, 3).map(reason => `<li>${reason}</li>`).join('')}
+                    </ul>
+                </div>
+                
+                <div style="font-size: 0.8rem; color: #aaa; margin-top: 10px;">
+                    <i class="fas fa-clock"></i> Updated: ${timeString}
+                </div>
+            </div>
+        `;
+        
+        // Also update AI prediction card
+        updateAIPredictionDisplay(prediction, confidence);
+        
+    } else if (action === 'CONSIDER') {
+        actionClass = 'signal-consider';
+        signalHTML = `
+            <div class="${actionClass}">
+                <div class="signal-action">${icon} ${action}</div>
+                <div class="signal-prediction ${prediction.toLowerCase()}">
+                    🤔 Consider: ${prediction}
+                </div>
+                <div class="signal-confidence">${confidence}% Confidence</div>
+                
+                <div class="signal-strength">
+                    <span class="strength-text">${strengthText}</span>
+                    <div class="strength-bar">
+                        <div class="strength-fill ${strengthClass}" style="width: ${strengthPercent}%"></div>
+                    </div>
+                </div>
+                
+                <div class="signal-reasons">
+                    <strong>Considerations:</strong>
+                    <ul>
+                        ${reasons.slice(0, 2).map(reason => `<li>${reason}</li>`).join('')}
+                    </ul>
+                </div>
+                
+                <div style="font-size: 0.8rem; color: #aaa; margin-top: 10px;">
+                    <i class="fas fa-clock"></i> Updated: ${timeString}
+                </div>
+            </div>
+        `;
+    } else {
+        actionClass = 'signal-wait';
+        signalHTML = `
+            <div class="${actionClass}">
+                <div class="signal-action">${icon} ${action}</div>
+                <div class="signal-confidence">Better to wait...</div>
+                
+                <div class="signal-strength">
+                    <span class="strength-text">${strengthText}</span>
+                    <div class="strength-bar">
+                        <div class="strength-fill ${strengthClass}" style="width: ${strengthPercent}%"></div>
+                    </div>
+                </div>
+                
+                <div class="signal-reasons">
+                    <strong>Why wait:</strong>
+                    <ul>
+                        ${reasons.slice(0, 2).map(reason => `<li>${reason}</li>`).join('')}
+                    </ul>
+                </div>
+                
+                <div style="font-size: 0.8rem; color: #aaa; margin-top: 10px;">
+                    <i class="fas fa-clock"></i> Updated: ${timeString}
+                </div>
+            </div>
+        `;
+    }
+    
+    signalCard.innerHTML = signalHTML;
+    
+    // Update details panel
+    if (signal.probabilities) {
+        const probs = signal.probabilities;
+        signalDetails.innerHTML = `
+            <div class="detail-row">
+                <span class="detail-label">Signal Score:</span>
+                <span class="detail-value">${score}/${maxScore}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">LOW Probability:</span>
+                <span class="detail-value">${(probs.LOW * 100).toFixed(1)}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">MIDDLE Probability:</span>
+                <span class="detail-value">${(probs.MIDDLE * 100).toFixed(1)}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">HIGH Probability:</span>
+                <span class="detail-value">${(probs.HIGH * 100).toFixed(1)}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Signal Strength:</span>
+                <span class="detail-value">${signal.signal_strength?.toFixed(0) || '0'}%</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Last Update:</span>
+                <span class="detail-value">${timeString}</span>
+            </div>
+        `;
+        signalDetails.style.display = 'block';
+    }
+}
+
+// Update AI prediction display to match signal
+function updateAIPredictionDisplay(prediction, confidence) {
+    const predictionCard = document.getElementById('prediction-card');
+    if (predictionCard) {
+        const categoryClass = prediction.toLowerCase();
+        const confidencePercent = parseFloat(confidence).toFixed(1);
+        
+        predictionCard.innerHTML = `
+            <div class="prediction-main">
+                <div class="prediction-category" style="color: var(--${categoryClass})">
+                    🎯 ${prediction}
+                </div>
+                <div class="prediction-confidence">
+                    ${confidencePercent}% Confidence
+                </div>
+            </div>
+            <div class="prediction-reason">
+                Based on latest data analysis
+            </div>
+            <div style="margin-top: 10px; font-size: 0.8rem; color: #aaa;">
+                <i class="fas fa-sync-alt"></i> Synced with Entry Signal
+            </div>
+        `;
+    }
+}
+
+// Start signal auto refresh - MATCHES FETCH INTERVAL (5 seconds)
+function startSignalAutoRefresh() {
+    if (signalInterval) {
+        clearInterval(signalInterval);
+    }
+    
+    // Match data fetcher interval (5 seconds)
+    signalInterval = setInterval(() => {
+        checkEntrySignal();
+    }, 5000); // 5 seconds - matches FETCH_INTERVAL
+    
+    console.log("🔄 Signal auto-check started (5 second interval)");
+    
+    // Initial check
+    checkEntrySignal();
+}
+
+// Stop signal auto refresh
+function stopSignalAutoRefresh() {
+    if (signalInterval) {
+        clearInterval(signalInterval);
+        signalInterval = null;
+        console.log("⏸️ Signal auto-check stopped");
+    }
+}
+
+// Make functions available globally
+window.checkEntrySignal = checkEntrySignal;
+window.startSignalAutoRefresh = startSignalAutoRefresh;
+window.stopSignalAutoRefresh = stopSignalAutoRefresh;
