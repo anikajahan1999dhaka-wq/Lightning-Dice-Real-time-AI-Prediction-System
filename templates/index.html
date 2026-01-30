@@ -126,6 +126,31 @@
                     </button>
                 </div>
 
+                <!-- 🔥 NEW ENTRY SIGNAL SECTION -->
+                <div class="section">
+                    <h3><i class="fas fa-bell"></i> Entry Signal</h3>
+                    <div class="signal-card" id="signal-card">
+                        <div class="loading">Analyzing signals...</div>
+                    </div>
+                    
+                    <div class="signal-controls">
+                        <button class="refresh-btn" onclick="checkEntrySignal()" style="margin-bottom: 5px;">
+                            <i class="fas fa-bolt"></i> Check Signal Now
+                        </button>
+                        <div class="auto-refresh-small">
+                            <span>Auto-check (5s):</span>
+                            <label class="switch small">
+                                <input type="checkbox" id="signal-auto-refresh" checked>
+                                <span class="slider small"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="signal-details" id="signal-details" style="display: none;">
+                        <!-- Details will be loaded here -->
+                    </div>
+                </div>
+
                 <div class="section">
                     <h3><i class="fas fa-history"></i> Recent Games</h3>
                     <div class="recent-games" id="recent-games">
