@@ -1,1 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 AI Analysis Dashboard - Lightning Dice</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Additional styles for AI analysis page */
+        .ai-dashboard {
+            padding: 20px;
+        }
+        
+        .dashboard-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, rgba(0, 180, 219, 0.2) 0%, rgba(0, 131, 176, 0.2) 100%);
+            border-radius: 15px;
+            border: 1px solid rgba(0, 180, 219, 0.3);
+        }
+        
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 5px solid;
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card.low {
+            border-left-color: #28a745;
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(32, 201, 151, 0.1) 100%);
+        }
+        
+        .stat-card.middle {
+            border-left-color: #ffc107;
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 213, 79, 0.1) 100%);
+        }
+        
+        .stat-card.high {
+            border-left-color: #dc3545;
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(232, 62, 140, 0.1) 100%);
+        }
+        
+        .stat-card.accuracy {
+            border-left-color: #00b4db;
+            background: linear-gradient(135deg, rgba(0, 180, 219, 0.1) 0%, rgba(0, 131, 176, 0.1) 100%);
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        
+        .section-title {
+            color: #00b4db;
+            margin: 30px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(0, 180, 219, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .prediction-table {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .prediction-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .prediction-table th {
+            background: rgba(0, 180, 219, 0.3);
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .prediction-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .prediction-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .prediction-correct {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .prediction-incorrect {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .prediction-pending {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        
+        .pattern-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin: 2px;
+        }
+        
+        .pattern-low {
+            background: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+        
+        .pattern-middle {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+        
+        .pattern-high {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 5px;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .nav-btn {
+            padding: 10px 20px;
+            background: rgba(0, 180, 219, 0.2);
+            border: 1px solid rgba(0, 180, 219, 0.3);
+            color: #00b4db;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .nav-btn:hover {
+            background: rgba(0, 180, 219, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .refresh-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-left: auto;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        .timing-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .timing-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .timing-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .timing-label {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-normal {
+            background: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+        
+        .status-due {
+            background: #ffc107;
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .tab.active {
+            border-bottom: 3px solid #00b4db;
+            color: #00b4db;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .log-container {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: #ccc;
+        }
+        
+        .log-time {
+            color: #00b4db;
+            margin-right: 10px;
+        }
+        
+        .log-message {
+            color: #e0e0e0;
+        }
+        
+        .feature-importance {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        
+        .feature-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .feature-name {
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+        
+        .feature-value {
+            font-weight: bold;
+            color: #00b4db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-buttons">
+            <a href="/" class="nav-btn">
+                <i class="fas fa-arrow-left"></i> Back to Main Dashboard
+            </a>
+            <button class="refresh-btn" onclick="loadAllData()">
+                <i class="fas fa-sync-alt"></i> Refresh All Data
+            </button>
+        </div>
+        
+        <div class="dashboard-header">
+            <h1><i class="fas fa-robot"></i> AI Analysis Dashboard</h1>
+            <p>Detailed insights into AI predictions, patterns, and performance</p>
+        </div>
+        
+        <!-- Stats Cards -->
+        <div class="stats-cards" id="stats-cards">
+            <div class="loading">Loading AI statistics...</div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('predictions')">
+                <i class="fas fa-chart-line"></i> Predictions
+            </div>
+            <div class="tab" onclick="switchTab('patterns')">
+                <i class="fas fa-project-diagram"></i> Patterns
+            </div>
+            <div class="tab" onclick="switchTab('timing')">
+                <i class="fas fa-clock"></i> Timing Analysis
+            </div>
+            <div class="tab" onclick="switchTab('features')">
+                <i class="fas fa-cogs"></i> Features
+            </div>
+            <div class="tab" onclick="switchTab('logs')">
+                <i class="fas fa-terminal"></i> AI Logs
+            </div>
+        </div>
+        
+        <!-- Tab Contents -->
+        <div class="tab-content active" id="predictions-tab">
+            <h3 class="section-title">
+                <i class="fas fa-history"></i> Prediction History (Last 100)
+            </h3>
+            
+            <div class="accuracy-summary" id="accuracy-summary">
+                <div class="loading">Loading accuracy data...</div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="accuracyChart"></canvas>
+            </div>
+            
+            <div class="prediction-table">
+                <div class="loading">Loading prediction history...</div>
+                <div id="prediction-table-content" style="display: none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Prediction</th>
+                                <th>Confidence</th>
+                                <th>Actual</th>
+                                <th>Status</th>
+                                <th>System Used</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prediction-table-body">
+                            <!-- Filled by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="patterns-tab">
+            <h3 class="section-title">
+                <i class="fas fa-project-diagram"></i> Learned Patterns
+            </h3>
+            
+            <div class="pattern-stats" id="pattern-stats">
+                <div class="loading">Loading pattern statistics...</div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="patternChart"></canvas>
+            </div>
+            
+            <div class="prediction-table">
+                <div class="loading">Loading patterns...</div>
+                <div id="patterns-table-content" style="display: none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Pattern</th>
+                                <th>Type</th>
+                                <th>Count</th>
+                                <th>Effectiveness</th>
+                                <th>Next Target</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="patterns-table-body">
+                            <!-- Filled by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="timing-tab">
+            <h3 class="section-title">
+                <i class="fas fa-clock"></i> Timing Analysis
+            </h3>
+            
+            <div class="timing-info" id="timing-info">
+                <div class="loading">Loading timing data...</div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="timingChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="hourlyChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="features-tab">
+            <h3 class="section-title">
+                <i class="fas fa-cogs"></i> Feature Importance
+            </h3>
+            
+            <div class="feature-importance" id="feature-importance">
+                <div class="loading">Loading feature importance...</div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="featureChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="logs-tab">
+            <h3 class="section-title">
+                <i class="fas fa-terminal"></i> AI Debug Logs (Last 50)
+            </h3>
+            
+            <div class="log-container" id="debug-logs">
+                <div class="loading">Loading debug logs...</div>
+            </div>
+        </div>
+    </div>
 
+    <script src="/static/ai_analysis.js"></script>
+    <script>
+        // Initialize charts
+        let accuracyChart = null;
+        let patternChart = null;
+        let timingChart = null;
+        let hourlyChart = null;
+        let featureChart = null;
+        
+        // Load all data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllData();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadAllData, 30000);
+        });
+        
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab').forEach(tabBtn => {
+                tabBtn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Activate tab button
+            document.querySelectorAll('.tab').forEach(tabBtn => {
+                if (tabBtn.textContent.includes(tabName.charAt(0).toUpperCase() + tabName.slice(1))) {
+                    tabBtn.classList.add('active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
